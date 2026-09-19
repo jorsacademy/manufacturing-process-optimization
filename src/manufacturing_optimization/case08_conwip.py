@@ -1,100 +1,62 @@
-"""Case 08: CONWIP level selection using event-driven discrete-event simulation."""
+"""Case 08 — CONWIP simulation optimization under stochastic processing and breakdowns."""
+from __future__ import annotations
 from dataclasses import dataclass
 import heapq
 import numpy as np
+from .validation import pct_improvement
 
 
 @dataclass(frozen=True)
-class Result:
-    throughput: float
-    mean_cycle_time: float
-    mean_wip: float
+class Replication:
+    throughput:float
+    mean_cycle_time:float
+    mean_wip:float
+    downtime_fraction:float
 
 
-def simulate(wip_cap: int, seed: int, horizon: float = 500.0) -> Result:
-    rng = np.random.default_rng(seed)
-    means = np.array([5.0, 7.0, 4.0])
-    machine_free = np.zeros(3)
-    queues = [[], [], []]
-    events = []
-    released = 0
-    completed = 0
-    in_system = 0
-    entry = {}
-    cycle = []
-    area_wip = 0.0
-    last_t = 0.0
-
+def simulate(wip_cap:int,seed:int,horizon=720.,warmup=120.)->Replication:
+    rng=np.random.default_rng(seed);means=np.array([5.,7.,4.]);mtbf=np.array([150.,110.,180.]);mttr=np.array([8.,12.,7.]);machine_free=np.zeros(3);queues=[[],[],[]];events=[];released=completed=in_system=0;entry={};cycles=[];area=down=0.;last=0.
     def release(now):
-        nonlocal released, in_system
-        while in_system < wip_cap:
-            job = released
-            released += 1
-            in_system += 1
-            entry[job] = now
-            queues[0].append(job)
-
-    def start_station(station, now):
-        if machine_free[station] <= now + 1e-12 and queues[station]:
-            job = queues[station].pop(0)
-            processing = rng.lognormal(
-                mean=np.log(means[station]) - 0.5 * 0.2**2,
-                sigma=0.2,
-            )
-            finish = now + processing
-            machine_free[station] = finish
-            heapq.heappush(events, (finish, station, job))
-
-    release(0.0)
-    start_station(0, 0.0)
-
+        nonlocal released,in_system
+        while in_system<wip_cap: entry[released]=now;queues[0].append(released);released+=1;in_system+=1
+    def start(st,now):
+        if machine_free[st]<=now+1e-12 and queues[st]:
+            job=queues[st].pop(0);p=rng.lognormal(np.log(means[st])-.5*.22**2,.22);repair=0.
+            if rng.random()<1-np.exp(-p/mtbf[st]):repair=rng.exponential(mttr[st])
+            finish=now+p+repair;machine_free[st]=finish;heapq.heappush(events,(finish,st,job,repair))
+    release(0);start(0,0)
     while events:
-        now, station, job = heapq.heappop(events)
-        if now > horizon:
-            break
-
-        area_wip += in_system * (now - last_t)
-        last_t = now
-
-        if station < 2:
-            queues[station + 1].append(job)
+        now,st,job,repair=heapq.heappop(events)
+        if now>horizon:break
+        if now>warmup:
+            left=max(last,warmup);area+=in_system*(now-left);down+=repair
+        last=now
+        if st<2:queues[st+1].append(job)
         else:
-            completed += 1
-            in_system -= 1
-            cycle.append(now - entry.pop(job))
-            release(now)
-
-        start_station(station, now)
-        if station < 2:
-            start_station(station + 1, now)
-        start_station(0, now)
-
-    return Result(
-        throughput=completed / horizon,
-        mean_cycle_time=float(np.mean(cycle)) if cycle else np.inf,
-        mean_wip=area_wip / max(last_t, 1e-9),
-    )
+            completed+=int(now>=warmup);in_system-=1
+            if entry[job]>=warmup:cycles.append(now-entry[job])
+            entry.pop(job,None);release(now)
+        start(st,now)
+        if st<2:start(st+1,now)
+        start(0,now)
+    measure=horizon-warmup
+    return Replication(completed/measure,float(np.mean(cycles)) if cycles else np.inf,area/measure,down/(measure*3))
 
 
-def solve(caps=range(2, 11), seeds=range(10)) -> dict:
-    rows = []
-    for cap in caps:
-        reps = [simulate(cap, seed) for seed in seeds]
-        throughput = np.mean([r.throughput for r in reps])
-        cycle_time = np.mean([r.mean_cycle_time for r in reps])
-        mean_wip = np.mean([r.mean_wip for r in reps])
-        score = cycle_time + 80.0 * max(0.0, 0.13 - throughput) + 0.4 * mean_wip
-        rows.append((score, cap, throughput, cycle_time, mean_wip))
-
-    score, cap, throughput, cycle_time, mean_wip = min(rows)
-    return {
-        "wip_cap": cap,
-        "throughput": throughput,
-        "mean_cycle_time": cycle_time,
-        "mean_wip": mean_wip,
-        "score": score,
-    }
+def evaluate_cap(cap,seeds=range(20)):
+    reps=[simulate(cap,s) for s in seeds];tp=np.array([r.throughput for r in reps]);ct=np.array([r.mean_cycle_time for r in reps]);w=np.array([r.mean_wip for r in reps]);dt=np.array([r.downtime_fraction for r in reps]);score=ct.mean()+120*max(0,.115-tp.mean())+.35*w.mean();return {"wip_cap":cap,"throughput":float(tp.mean()),"cycle_time":float(ct.mean()),"mean_wip":float(w.mean()),"downtime_fraction":float(dt.mean()),"throughput_se":float(tp.std(ddof=1)/np.sqrt(len(tp))),"score":float(score)}
 
 
-if __name__ == "__main__":
-    print(solve())
+def solve(caps=range(2,13),seeds=range(20))->dict:
+    rows=[evaluate_cap(c,seeds) for c in caps];best=min(rows,key=lambda x:x["score"]);return {**best,"frontier":rows}
+
+
+def baseline(seeds=range(20))->dict:
+    return evaluate_cap(10,seeds)
+
+
+def industrial_benchmark():
+    o=solve();b=baseline();return {"selected_wip_cap":o["wip_cap"],"optimized_score":o["score"],"baseline_score":b["score"],"score_improvement_pct":pct_improvement(b["score"],o["score"]),"throughput":o["throughput"],"cycle_time":o["cycle_time"],"throughput_se":o["throughput_se"]}
+
+
+if __name__=="__main__":print(industrial_benchmark())

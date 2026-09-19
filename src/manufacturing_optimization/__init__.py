@@ -1,4 +1,4 @@
-"""Manufacturing process optimization case studies."""
+"""Industrial manufacturing optimization case studies."""
 
 __all__ = [
     "case01_production_maintenance",

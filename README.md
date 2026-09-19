@@ -1,67 +1,113 @@
 # Manufacturing Process Optimization
 
-Industrial Engineering / Operations Research monorepo with 10 manufacturing decision systems implemented in Python. Version 0.2 moves the project from isolated solver demos to auditable case studies with operational baselines, independent feasibility checks, KPI comparisons and stress/sensitivity analysis.
+Industrial Engineering / Operations Research monorepo with 10 manufacturing decision systems implemented in Python.
 
-## Industrial case portfolio
+Version **0.3** adds a formal **dual-scale fixture standard** to every case:
 
-| Case | Shop-floor decision | Method | Industrial additions |
-|---|---|---|---|
-| 01 | Production assignment + preventive maintenance | MILP | heterogeneous machines, failure-risk economics, PM downtime, overtime, risk sensitivity |
-| 02 | Milk-run / line-side replenishment | MILP | safety stock, storage limits, multiple trips, emergency supply, vehicle-capacity sensitivity |
-| 03 | AGV/AMR task allocation | exact combinatorial optimization | eligibility, battery reserve, due times, priorities, workload balance |
-| 04 | Worker rotation | MILP | skill matrix, fatigue-weighted ergonomic exposure, exposure caps, high-risk rotation |
-| 05 | Quality inspection policy | discounted MDP | inspection cost, escape/rework economics, exact policy evaluation, exhaustive cross-check |
-| 06 | CNC process parameters | nonlinear global optimization | tool life, roughness, spindle power, energy, hardness stress test |
-| 07 | Mold/tooling-aware press scheduling | exact scheduling | compatibility, sequence-dependent setup matrix, due dates, weighted tardiness |
-| 08 | CONWIP control | discrete-event simulation optimization | warm-up, stochastic processing, breakdown/repair, replication uncertainty |
-| 09 | Energy-aware production scheduling | time-indexed MILP | TOU tariff, peak-demand charge, weighted tardiness, maintenance blackout |
-| 10 | Cutting stock + remnants | integer optimization | kerf, finite remnant stock, trim loss, overproduction accounting |
+- a **small validation fixture** for exactness, exhaustive checking, independent feasibility audits and regression testing;
+- a **large industrial benchmark fixture** for scale, sparse model construction, rolling-horizon methods, simulation campaigns, decomposition or scalable heuristics.
 
-## Engineering standard used in every case
+## Case portfolio and benchmark scale
 
-Each case contains four layers:
+| Case | Decision problem | Validation fixture | Industrial fixture |
+|---|---|---:|---:|
+| 01 | Production assignment + preventive maintenance | 8 jobs × 2 machines | 500 jobs × 20 machines |
+| 02 | Milk-run / line-side replenishment | 3 stations × 6 periods | 40 stations × 96 periods |
+| 03 | AGV/AMR task allocation | 8 tasks × 3 AGVs | 250 tasks × 20 AGVs |
+| 04 | Ergonomic worker rotation | 4 workers × 3 stations × 5 periods | 120 × 36 × 8 |
+| 05 | Quality inspection policy | 3 states × 3 actions | 12 states × 4 actions |
+| 06 | CNC process parameters | 1 machining operation | 1,000 operations |
+| 07 | Mold/tooling-aware press scheduling | 6 jobs × 2 presses | 180 jobs × 12 presses |
+| 08 | CONWIP simulation optimization | 3 stations, 20 reps | 12 stations, 50 reps |
+| 09 | Energy-aware scheduling | 5 jobs × 1 machine × 16 periods | 120 jobs × 4 machines × 168 periods |
+| 10 | Cutting stock + remnants | 3 item × 3 stock types | 30 item × 6 stock types |
 
-1. Decision model — explicit operational variables and constraints.
-2. Baseline policy — a transparent heuristic or incumbent-style policy.
-3. Independent audit — feasibility is reconstructed outside the solver result.
-4. Decision evidence — optimized vs baseline KPI comparison; selected cases also expose sensitivity/stress functions.
+The small and large fixtures intentionally do **not** imply the same algorithm. Small fixtures can use exact enumeration where that improves verification. Large fixtures declare an industrial solver mode such as sparse MILP, rolling-horizon MILP/CP-SAT, LNS, simulation optimization, batched NLP, or column generation.
 
-The bundled data are deterministic or seeded synthetic fixtures. They are designed to exercise the model logic and are not presented as measurements from a particular plant.
+## Engineering standard
+
+Every case now has six evidence layers:
+
+1. explicit manufacturing decision model;
+2. operational baseline;
+3. independent feasibility audit;
+4. KPI comparison;
+5. sensitivity/stress logic where relevant;
+6. **dual-scale reproducible fixtures with fixed seed and payload fingerprint**.
+
+The benchmark data are synthetic engineering fixtures, not measurements from a named factory.
+
+## Fixture library
+
+List all committed fixture contracts:
+
+```bash
+python -m manufacturing_optimization.fixture_library
+```
+
+Materialize all 20 fixtures as JSON:
+
+```bash
+python -m manufacturing_optimization.fixture_library --materialize generated_fixtures
+```
+
+Each materialized fixture contains:
+
+- case id and scale;
+- seed and schema version;
+- dimensions;
+- physical units;
+- intended solver mode;
+- SHA-256 fingerprint;
+- complete payload.
+
+The committed reference fingerprints live in `fixtures/manifest.json`.
 
 ## Install and validate
 
-    python -m venv .venv
-    source .venv/bin/activate
-    python -m pip install --upgrade pip
-    pip install -e ".[dev]"
-    pytest
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+pytest
+```
 
-## Run the complete benchmark panel
+## Run the small-case benchmark panel
 
-    python -m manufacturing_optimization.benchmarks
-
-Run individual cases:
-
-    python -m manufacturing_optimization.case01_production_maintenance
-    python -m manufacturing_optimization.case06_cnc_process
-    python -m manufacturing_optimization.case08_conwip
+```bash
+python -m manufacturing_optimization.benchmarks
+```
 
 ## Repository structure
 
-    src/manufacturing_optimization/
-      validation.py
-      benchmarks.py
-      case01_production_maintenance.py
-      ...
-      case10_cutting_stock.py
-    docs/
-      industrialization.md
-      data_contracts.md
-      case01.md ... case10.md
-    tests/
-      test_cases.py
-      test_industrial_cases.py
+```text
+src/manufacturing_optimization/
+  validation.py
+  benchmarks.py
+  fixture_library.py
+  case01_production_maintenance.py
+  ...
+  case10_cutting_stock.py
 
-## Scope and interpretation
+fixtures/
+  README.md
+  manifest.json
 
-The project is a portfolio/reference implementation, not a generic APS/MES package. Exact enumeration is deliberately used where the bundled instance is small enough to make the result independently checkable. Larger plant deployments would replace those exact small-instance engines with decomposition, CP-SAT/MILP, metaheuristics or rolling-horizon control while retaining the same data contracts, audits and KPI definitions.
+docs/
+  benchmark_protocol.md
+  industrialization.md
+  data_contracts.md
+  case01.md ... case10.md
+
+tests/
+  test_cases.py
+  test_industrial_cases.py
+  test_fixture_library.py
+```
+
+## Benchmark interpretation
+
+Validation CI and industrial performance benchmarking are deliberately separated. CI constructs and validates all 20 fixtures, but it does not attempt to solve every large industrial instance to optimality. Industrial campaigns should additionally record solver/runtime version, hardware, wall-clock time, incumbent objective, optimality gap or fallback rate, memory-relevant dimensions and result artifacts.
+
+This separation prevents a small exact demonstrator from being presented as evidence of industrial scalability while preserving a rigorous correctness oracle for every case.

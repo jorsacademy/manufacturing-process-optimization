@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "manufacturing-process-optimization"
-version = "0.2.0"
-description = "Industrial-grade manufacturing optimization case studies in Python"
+version = "0.3.0"
+description = "Industrial manufacturing optimization case studies with dual-scale reproducible fixtures"
 requires-python = ">=3.11"
 dependencies = ["numpy>=2.0", "scipy>=1.13", "pandas>=2.2"]
 

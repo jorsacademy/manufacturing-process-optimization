@@ -11,4 +11,5 @@ __all__ = [
     "case08_conwip",
     "case09_energy_scheduling",
     "case10_cutting_stock",
+    "fixture_library",
 ]
